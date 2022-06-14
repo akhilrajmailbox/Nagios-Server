@@ -1,0 +1,133 @@
+#################################################################################################
+##########################    contacts for specific monitoring    ###############################
+#################################################################################################
+
+
+
+define contact{
+        contact_name                    mycompany                  ; Short name of user
+        use                             my-contact              ; Inherit default values from generic-contact template (defined above)
+        alias                           mycompany                  ; Full name of user
+        email                           mycompany@localhost        ; <<***** CHANGE THIS TO YOUR EMAIL ADDRESS ******
+        }
+
+
+define contact{
+        contact_name                    test                    ; Short name of user
+        use                             my-contact              ; Inherit default values from generic-contact template (defined above)
+        alias                           test                    ; Full name of user
+        email                           test@localhost          ; <<***** CHANGE THIS TO YOUR EMAIL ADDRESS ******
+        }
+
+
+##########################
+
+
+define contactgroup{
+        contactgroup_name       special1
+        alias                   special1
+        members                 test
+        }
+
+define contactgroup{
+        contactgroup_name       special2
+        alias                   special2
+        members                 mycompany
+        }
+
+define contactgroup{
+        contactgroup_name       special3
+        alias                   special3
+        members                 mycompany,test
+        }
+
+
+##########################
+
+
+define service{
+        name                            special1-service ; The 'name' of this service template
+        use                             my-service       ; Name of service template to use
+        contact_groups                  special1         ; Notifications get sent out to everyone in the 'special1' group
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL SERVICE, JUST A TEMPLATE!
+        }
+
+define service{
+        name                            special2-service ; The 'name' of this service template
+        use                             my-service       ; Name of service template to use
+        contact_groups                  special2         ; Notifications get sent out to everyone in the 'special2' group
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL SERVICE, JUST A TEMPLATE!
+        }
+
+define service{
+        name                            special3-service ; The 'name' of this service template
+        use                             my-service       ; Name of service template to use
+        contact_groups                  special3         ; Notifications get sent out to everyone in the 'special3' group
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL SERVICE, JUST A TEMPLATE!
+        }
+
+
+#################################################################################################
+###############################         Host and Service          ###############################
+#################################################################################################
+
+define host{
+        use                     my-host                 ; Name of host template to use
+                                                        ; This host definition will inherit all variables that are defined
+                                                        ; in (or inherited by) the linux-server host template definition.
+        host_name               special
+        alias                   different service
+        address                 127.0.0.1
+        }
+
+
+
+##########################
+## for test user
+
+define service{
+        use                             special1-service         ; Name of service template to use
+        host_name                       special
+        service_description             PING
+        check_command                   check_ping!100.0,20%!500.0,60%
+        }
+
+
+define service{
+        use                             special1-service         ; Name of service template to use
+        host_name                       special
+        service_description             Root Partition
+        check_command                   check_local_disk!20%!10%!/
+        }
+
+
+define service{
+        use                             special1-service         ; Name of service template to use
+        host_name                       special
+        service_description             Current Users
+        check_command                   check_local_users!20!50
+        }
+
+
+
+##########################
+## for mycompany user
+
+define service{
+        use                             special2-service         ; Name of service template to use
+        host_name                       special
+        service_description             Total Processes
+        check_command                   check_local_procs!250!400!RSZDT
+        }
+
+
+
+##########################
+## for test,mycompany user
+
+define service{
+        use                             special3-service         ; Name of service template to use
+        host_name                       special
+        service_description             HTTP
+        check_command                   check_http
+        }

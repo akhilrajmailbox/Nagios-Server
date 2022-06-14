@@ -1,0 +1,232 @@
+
+#################################################################################################
+#############   Template used by hosts and services for inherit the properties   ################
+#################################################################################################
+
+define host{
+        name                            basic-host       ; The name of this host template
+        notifications_enabled           1                ; Host notifications are enabled
+        event_handler_enabled           1                ; Host event handler is enabled
+        flap_detection_enabled          1                ; Flap detection is enabled
+        process_perf_data               1                ; Process performance data
+        retain_status_information       1                ; Retain status information across program restarts
+        retain_nonstatus_information    1                ; Retain non-status information across program restarts
+        notification_period             24x7             ; Send host notifications at any time
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL HOST, JUST A TEMPLATE!
+        }
+
+
+define host{
+        name                            my-host          ; The name of this host template
+        use                             basic-host       ; This template inherits other values from the generic-host template
+        check_period                    24x7             ; By default, Linux hosts are checked round the clock
+        check_interval                  2                ; Actively check the host every 5 minutes
+        retry_interval                  1                ; Schedule host check retries at 1 minute intervals
+        max_check_attempts              5                ; Check each Linux host 10 times (max)
+        check_command                   check-host-alive ; Default command to check Linux hosts
+        notification_period             workhours        ; Linux admins hate to be woken up, so we only notify during the day
+                                                         ; Note that the notification_period variable is being overridden from
+                                                         ; the value that is inherited from the basic-host template!
+        notification_interval           180              ; Resend notifications every 3 hours
+        notification_options            d,u,r            ; Only send notifications for specific host states
+        contact_groups                  admins           ; Notifications get sent to the admins by default
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL HOST, JUST A TEMPLATE!
+        }
+
+
+
+define service{
+        name                            my-service       ; The 'name' of this service template
+        active_checks_enabled           1                ; Active service checks are enabled
+        passive_checks_enabled          1                ; Passive service checks are enabled/accepted
+        parallelize_check               1                ; Active service checks should be parallelized (disabling this can lead to major performance problems)
+        obsess_over_service             1                ; We should obsess over this service (if necessary)
+        check_freshness                 0                ; Default is to NOT check service 'freshness'
+        notifications_enabled           1                ; Service notifications are enabled
+        event_handler_enabled           1                ; Service event handler is enabled
+        flap_detection_enabled          1                ; Flap detection is enabled
+        process_perf_data               1                ; Process performance data
+        retain_status_information       1                ; Retain status information across program restarts
+        retain_nonstatus_information    1                ; Retain non-status information across program restarts
+        is_volatile                     0                ; The service is not volatile
+        check_period                    24x7             ; The service can be checked at any time of the day
+        max_check_attempts              3                ; Re-check the service up to 3 times in order to determine its final (hard) state
+        check_interval                  2                ; Check the service every 10 minutes under normal conditions
+        retry_interval                  1                ; Re-check the service every two minutes until a hard state can be determined
+        contact_groups                  admins           ; Notifications get sent out to everyone in the 'admins' group
+        notification_options            w,u,c,r          ; Send notifications about warning, unknown, critical, and recovery events
+        notification_interval           180              ; Re-notify about service problems every hour
+        notification_period             24x7             ; Notifications can be sent out at any time
+        register                        0                ; DONT REGISTER THIS DEFINITION - ITS NOT A REAL SERVICE, JUST A TEMPLATE!
+        }
+
+
+
+#################################################################################################
+###############################          custom command           ###############################
+#################################################################################################
+# you can define your own command also,
+#http://amar-linux.blogspot.in/2012/08/nagios-monitoring-custom.html
+#/usr/local/nagios/libexec/<<check_{name}>> --help   (for getting idea about arguments)
+
+#define command{
+#        command_name    my_disk
+#        command_line    $USER1$/check_disk -w $ARG1$ -c $ARG2$ -p $ARG3$
+#        }
+#
+#
+#define command{
+#        command_name    my_load
+#        command_line    $USER1$/check_load -w $ARG1$ -c $ARG2$
+#        }
+#
+#
+#define command{
+#        command_name    my_procs
+#        command_line    $USER1$/check_procs -w $ARG1$ -c $ARG2$ -s $ARG3$
+#        }
+#
+#
+#define command{
+#        command_name    my_users
+#        command_line    $USER1$/check_users -w $ARG1$ -c $ARG2$
+#        }
+#
+#
+#define command{
+#        command_name    my_swap
+#        command_line    $USER1$/check_swap -w $ARG1$ -c $ARG2$
+#        }
+
+
+
+#################################################################################################
+###############################       Remote macine command       ###############################
+#################################################################################################
+# The following commands need to put in "/etc/nagios/nrpe.cfg" file of remote machine(remove the #).
+# use "/usr/lib/nagios/plugins/check_{name} --help" in client machine for getting argument info
+#
+
+#command[my_disk]=/usr/lib/nagios/plugins/check_disk -w 60% -c 40% -p /
+#command[my_load]=/usr/lib/nagios/plugins/check_load -w 5.0,4.0,3.0 -c 10.0,6.0,4.0
+#command[my_procs]=/usr/lib/nagios/plugins/check_procs -w 300 -c 450 -s RSZDT
+#command[my_users]=/usr/lib/nagios/plugins/check_users -w 15 -c 25
+#command[my_swap]=/usr/lib/nagios/plugins/check_swap -w 30% -c 20%
+
+
+#################################################################################################
+###############################         Host and Service          ###############################
+#################################################################################################
+
+define host {
+        use                             my-host
+        host_name                       my-machine
+        alias                           virtual machine
+        address                         192.168.1.248
+}
+
+###############################
+
+define host {
+        use                             my-host
+        host_name                       remote-machine
+        alias                           Bhargavy's machine
+        address                         192.168.1.126
+}
+
+###############################
+
+define service {
+        use                             my-service
+        host_name                       my-machine
+        service_description             PING
+        check_command                   check_ping!100.0,20%!500.0,60%
+}
+
+define service {
+        use                             my-service     
+        host_name                       my-machine
+        service_description             Apache Server
+        check_command                   check_tcp!7777
+}
+
+define service {
+        use                             my-service
+        host_name                       my-machine
+        service_description             SSH
+        check_command                   check_tcp!2222
+        notifications_enabled           0
+}
+
+###############################
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             PING
+        check_command                   check_ping!100.0,20%!500.0,60%
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Docker Apache Server
+        check_command                   check_tcp!9797
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             SSH
+        check_command                   check_tcp!22
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             docker SSH
+        check_command                   check_tcp!9796
+}
+
+###############################
+
+#custom services by using custom commands
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Root Partition
+        check_command                   check_nrpe!my_disk
+        notifications_enabled           0
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Current Load
+        check_command                   check_nrpe!my_load
+        notifications_enabled           0
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Total Processes
+        check_command                   check_nrpe!my_procs
+        notifications_enabled           0
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Current Users
+        check_command                   check_nrpe!my_users
+        notifications_enabled           0
+}
+
+define service {
+        use                             my-service
+        host_name                       remote-machine
+        service_description             Swap Usage
+        check_command                   check_nrpe!my_swap
+}

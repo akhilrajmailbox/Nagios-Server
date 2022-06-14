@@ -1,0 +1,43 @@
+#!/bin/bash
+type ps >/dev/null 2>&1 || { echo >&2 "CRITICAL: The ps utility is required for this script to run."; exit 2; }
+
+EXITCODE=0
+if [[ ! -z ${1} ]] ; then
+	PROCESS_NAME="${1}"
+fi
+SCRIPT_NAME="${0}"
+
+function returnResult () {
+	CHECKSTATUS="${1}"
+	if [[ "${CHECKSTATUS}" == "Critical" ]] ; then
+		EXITCODE=2
+	fi
+}
+
+function checkProc () {
+        CHECKS=$(ps -ef | grep -v "${SCRIPT_NAME}\|grep\|nrpe" | grep -w "${PROCESS_NAME}")
+        if [[ -z ${CHECKS} ]] ; then
+			returnResult Critical
+		else
+			returnResult OK
+        fi
+
+		case ${EXITCODE} in
+			0) printf "OK - ${PROCESS_NAME} is up and running\n" ;;
+			2) printf "Critical - ${PROCESS_NAME} is down. please fix it ASAP\n" ;;
+		esac
+}
+
+
+function helpMee () {
+	printf "${SCRIPT_NAME} need one argument\nUsage : ${SCRIPT_NAME} myServiceName\n"
+	exit 1
+}
+
+
+if [[ ! -z ${PROCESS_NAME} ]] ; then
+	checkProc ${PROCESS_NAME}
+else
+	helpMee
+fi
+exit ${EXITCODE}

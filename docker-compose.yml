@@ -1,0 +1,31 @@
+version: '3.5'
+services:
+  nagios:
+    image: akhilrajmailbox/nagios:1.0.0
+    # build:
+    #   context: .
+    #   dockerfile: Docker/Dockerfile
+    container_name: nagios
+    hostname: nagios
+    restart: always
+    environment:
+      USER_PASSWORD: "SomeSecurePass"
+      SMTP_SERVER: "10.10.10.10"
+      SMTP_PORT: "25"
+      SMTP_USERNAME: "myid@example.com"
+      SMTP_PASSWORD: ""
+      NAGIOS_MAIL_SENDER: "PagerDuty <nagios.manager@example.com>"
+    ports:
+      - 30000:80
+    # expose:
+    #   - 80
+    volumes:
+      - /DATA/DevOps/nagios/MonitorCfg:/tmp/MonitorCfg
+      # - /DATA/DevOps/nagios/CustomPlugin:/tmp/CustomPlugin
+    networks:
+      - nagios-network
+
+networks:
+  nagios-network:
+    external: true
+    name: devops-network

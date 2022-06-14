@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# The script checks if a container is running.
+#   OK - running
+#   WARNING - restarting
+#   CRITICAL - stopped
+#   UNKNOWN - does not exist
+
+# export DOCKER_HOST="tcp://127.0.0.1:2375"
+
+if [[ ${1} == "" ]] ; then
+  echo "UNKNOWN - Container ID or Friendly Name Required"
+  exit 3
+fi
+
+# docker compose and docker swarm
+if docker stack ls > /dev/null 2>&1 ; then
+  STACK_NAME=${1}
+  SERVICE_TYPE="Swarm Container"
+  CONTAINER=$(docker stack ps ${STACK_NAME} --format "{{.ID}}" | head -1 | xargs docker inspect --format '{{.Status.ContainerStatus.ContainerID}}')
+else
+  SERVICE_TYPE="Compose Container"
+  CONTAINER=${1}
+fi
+ACTUATOR_OPT=${2}
+
+if [ "x${CONTAINER}" == "x" ]; then
+  echo "UNKNOWN - Container ID or Friendly Name Required"
+  exit 3
+fi
+
+if [ "x$(which docker)" == "x" ]; then
+  echo "UNKNOWN - Missing docker binary"
+  exit 3
+fi
+
+docker info > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "UNKNOWN - Unable to talk to the docker daemon"
+  exit 3
+fi
+
+RUNNING=$(docker inspect --format="{{.State.Running}}" ${CONTAINER} 2> /dev/null)
+
+if [ $? -eq 1 ]; then
+  echo "UNKNOWN - ${SERVICE_TYPE} does not exist."
+  exit 3
+fi
+
+if [ "${RUNNING}" == "false" ]; then
+  echo "CRITICAL - ${SERVICE_TYPE} is not running."
+  exit 2
+fi
+
+RESTARTING=$(docker inspect --format="{{.State.Restarting}}" ${CONTAINER})
+
+if [ "${RESTARTING}" == "true" ]; then
+  echo "WARNING - ${SERVICE_TYPE} state is restarting."
+  exit 1
+fi
+
+STARTED=$(docker inspect --format="{{.State.StartedAt}}" ${CONTAINER} | cut -d"." -f1)
+NETWORK_IP=$(docker inspect --format="{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" ${CONTAINER})
+
+if [ "${ACTUATOR_OPT}" != "" ] ; then
+  NETWORK_PORT=$(docker inspect ${CONTAINER} --format="{{.Config.ExposedPorts}}" | cut -d"[" -f2 | cut -d"/" -f1)
+  ACTUATOR_DATA=$(curl -s http://${NETWORK_IP}:${NETWORK_PORT}/actuator/${ACTUATOR_OPT} | python -m json.tool)
+  if [[ ${NETWORK_IP} != "" ]] ; then
+    echo -e "OK - ${SERVICE_TYPE} is running. IP: ${NETWORK_IP}, StartedAt: ${STARTED} | ACTUATOR_DATA : \n\n${ACTUATOR_DATA}\n"
+  else
+    echo -e "OK - ${SERVICE_TYPE} is running. StartedAt: ${STARTED} | ACTUATOR_DATA : \n\n${ACTUATOR_DATA}\n"
+  fi
+else
+  if [[ ${NETWORK_IP} != "" ]] ; then
+    echo "OK - ${SERVICE_TYPE} is running. IP: ${NETWORK_IP}, StartedAt: ${STARTED}"
+  else
+    echo "OK - ${SERVICE_TYPE} is running. StartedAt: ${STARTED}"
+  fi
+fi

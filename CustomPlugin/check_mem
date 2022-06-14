@@ -1,0 +1,130 @@
+#!/bin/bash
+
+#Set script name
+SCRIPT=`basename ${BASH_SOURCE[0]}`
+
+#Set default values
+optMW=80
+optMC=90
+
+optCW=20
+optCC=30
+
+# help function
+function printHelp {
+  echo -e \\n"Help for $SCRIPT"\\n
+  echo -e "Basic usage: $SCRIPT -w {warning} -c {critical} -W {warning} -C {critical}"\\n
+  echo "Command switches are optional, default values for warning is 80% and critical is 90%"
+  echo "-w - Sets warning value for Memory Usage. Default is 80%"
+  echo "-c - Sets critical value for Memory Usage. Default is 90%"
+  echo "-W - Sets warning value for Cache Usage. Default is 20%"
+  echo "-C - Sets critical value for Cache Usage. Default is 30%"
+  echo -e "-h  - Displays this help message"\\n
+  echo -e "Example: $SCRIPT -w 80 -c 90 -W 40 -C 60"\\n
+  exit 1
+}
+
+# regex to check is OPTARG an integer
+re='^[0-9]+$'
+
+while getopts :w:c:W:C:h FLAG; do
+  case $FLAG in
+    w)
+      if ! [[ $OPTARG =~ $re ]] ; then
+        echo "error: Not a number" >&2; exit 1
+      else
+        optMW=$OPTARG
+      fi
+      ;;
+    c)
+      if ! [[ $OPTARG =~ $re ]] ; then
+        echo "error: Not a number" >&2; exit 1
+      else
+        optMC=$OPTARG
+      fi
+      ;;
+    W)
+      if ! [[ $OPTARG =~ $re ]] ; then
+        echo "error: Not a number" >&2; exit 1
+      else
+        optCW=$OPTARG
+      fi
+      ;;
+    C)
+      if ! [[ $OPTARG =~ $re ]] ; then
+        echo "error: Not a number" >&2; exit 1
+      else
+        optCC=$OPTARG
+      fi
+      ;;
+    h)
+      printHelp
+      ;;
+    \?)
+      echo -e \\n"Option - $OPTARG not allowed."
+      printHelp
+      exit 2
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+
+
+
+
+array=( $(cat /proc/meminfo | egrep 'MemTotal|MemFree|Buffers|Cached' |awk '{print $1 " " $2}' |tr '\n' ' ' |tr -d ':' |awk '{ printf("%i %i %i %i %i", $2, $4, $6, $8, $10) }') )
+
+memTotal_k=${array[0]}
+memTotal_b=$(($memTotal_k*1024))
+memTotal_m=$(($memTotal_k/1024))
+
+memFree_k=${array[1]}
+memFree_b=$(($memFree_k*1024))
+memFree_m=$(($memFree_k/1024))
+
+memBuffer_k=${array[2]}
+memBuffer_b=$(($memBuffer_k*1024))
+memBuffer_m=$(($memBuffer_k/1024))
+
+memCache_k=${array[3]}
+memCache_b=$(($memCache_k*1024))
+memCache_m=$(($memCache_k/1024))
+
+
+# memUsed_b=$(($memTotal_b-$memFree_b-$memBuffer_b-$memCache_b))
+# memUsed_m=$(($memTotal_m-$memFree_m-$memBuffer_m-$memCache_m))
+memUsed_b=$(($memTotal_b-$memFree_b))
+memUsed_m=$(($memTotal_m-$memFree_m))
+memUsed_g=$(($memUsed_m/1024))
+memUsedPrc=$((($memUsed_b*100)/$memTotal_b))
+
+cacheUsed_b=$(($memCache_b))
+cacheUsed_m=$(($memCache_m))
+cacheUsed_g=$(($memCache_m/1024))
+cacheUsedPrc=$((($cacheUsed_b*100)/$memTotal_b))
+
+
+message="Mem Used: $memUsed_m MB / $memTotal_m MB - $memUsedPrc% ; Cache Used: $cacheUsed_m MB / $memTotal_m MB - $cacheUsedPrc%"
+mem_message="Mem Used: $memUsed_m MB / $memTotal_m MB - $memUsedPrc%"
+cache_message="Cache Used: $cacheUsed_m MB / $memTotal_m MB - $cacheUsedPrc%"
+
+
+# Memory Usage
+if [ $memUsedPrc -ge $optMC ] ; then
+  echo -e CRITICAL - $message
+  $(exit 2)
+elif [ $memUsedPrc -ge $optMW ] ; then
+  echo -e WARNING - $message
+  $(exit 1)
+elif [ $cacheUsedPrc -ge $optCC ] ; then
+  echo -e CRITICAL - $message
+  $(exit 2)
+elif [ $cacheUsedPrc -ge $optCW ] ; then
+  echo -e WARNING - $message
+  $(exit 1)
+else
+  echo -e OK - $message
+  $(exit 0)
+fi
