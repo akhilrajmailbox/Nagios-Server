@@ -1,84 +1,93 @@
-FROM ubuntu:14.04
+FROM ubuntu:22.04
+MAINTAINER Akhil Raj
 
+# Basic packages and configuration
 RUN bash -c 'debconf-set-selections <<< "postfix postfix/mailname string nagios.local"'
 RUN bash -c 'debconf-set-selections <<< "postfix postfix/main_mailer_type string Internet Site"'
-RUN apt-get update && apt-get upgrade -y && apt-get install -y apache2 sudo vim net-tools curl \
-            dnsutils wget build-essential libgd2-xpm-dev openssl libssl-dev xinetd \
-            apache2-utils unzip postfix php5 libapache2-mod-php5 php5-mcrypt php5-cli mailutils
-RUN useradd nagios && groupadd nagcmd && usermod -a -G nagcmd nagios
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential apache2 php openssl perl make mailutils libmcrypt-dev iputils-ping \
+    php-gd libgd-dev libapache2-mod-php libperl-dev libssl-dev daemon wget apache2-utils unzip autoconf automake gcc libc6 net-tools dnsutils
+RUN useradd nagios \
+    && groupadd nagcmd \
+    && usermod -a -G nagcmd nagios \
+    && usermod -a -G nagcmd www-data
 
 ## Installing and Configuring Nagios Server
 WORKDIR /opt/
-# RUN curl -L -O https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.3.2.tar.gz
-# RUN tar xvf nagios-*.tar.gz && rm -rf nagios-*.tar.gz && mv /opt/nagios-* /opt/nagios
-ADD Resources/nagios-4.3.2.tar.gz /opt/
-RUN mv /opt/nagios-* /opt/nagios
+# RUN curl -L -O https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.4.6.tar.gz
+COPY Resources/nagios-4.4.6.tar.gz /opt/
+RUN tar xvf nagios-*.tar.gz \
+    && rm -rf nagios-*.tar.gz \
+    && mv /opt/nagios-* /opt/nagios
 WORKDIR /opt/nagios
-RUN ./configure --with-nagios-group=nagios --with-command-group=nagcmd
-RUN make all
-RUN make install
-RUN make install-commandmode
-RUN make install-init
-RUN make install-config
-RUN /usr/bin/install -c -m 644 sample-config/httpd.conf /etc/apache2/sites-available/nagios.conf
-RUN usermod -G nagcmd www-data
+RUN ./configure --with-nagios-group=nagios --with-command-group=nagcmd --with-httpd_conf=/etc/apache2/sites-enabled/ \
+    && make all \
+    && make install \
+    && make install-init \
+    && make install-config \
+    && make install-commandmode \
+    && make install-webconf
 
 ## Installing all nagios plugins
 WORKDIR /opt/
-# RUN curl -L -O http://nagios-plugins.org/download/nagios-plugins-2.2.1.tar.gz
-# RUN tar xvf /opt/nagios-plugins-*.tar.gz && rm -rf nagios-plugins-*.tar.gz && mv /opt/nagios-plugins-* /opt/nagios-plugins
-ADD Resources/nagios-plugins-2.2.1.tar.gz /opt/
-RUN mv /opt/nagios-plugins-* /opt/nagios-plugins
+# RUN curl -L -O https://nagios-plugins.org/download/nagios-plugins-2.3.3.tar.gz
+COPY Resources/nagios-plugins-2.3.3.tar.gz /opt/
+RUN tar xvf /opt/nagios-plugins-*.tar.gz \
+    && rm -rf nagios-plugins-*.tar.gz \
+    && mv /opt/nagios-plugins-* /opt/nagios-plugins
 WORKDIR /opt/nagios-plugins
-RUN ./configure --with-nagios-user=nagios --with-nagios-group=nagios --with-openssl
-RUN make
-RUN make install
+RUN ./configure --with-nagios-user=nagios --with-nagios-group=nagios --with-openssl \
+    && make \
+    && make install
 
 ## Configuring nrpe plugin for nagios
 WORKDIR /opt/
-# RUN curl -L -O http://downloads.sourceforge.net/project/nagios/nrpe-2.x/nrpe-2.15/nrpe-2.15.tar.gz
-# RUN tar xvf /opt/nrpe-*.tar.gz && rm -rf nrpe-*.tar.gz && mv /opt/nrpe-* /opt/nrpe
-ADD Resources/nrpe-2.15.tar.gz /opt/
-RUN mv /opt/nrpe-* /opt/nrpe
+# RUN wget --no-check-certificate -O nrpe-4.1.0.tar.gz https://github.com/NagiosEnterprises/nrpe/archive/nrpe-4.1.0.tar.gz
+COPY Resources/nrpe-4.1.0.tar.gz /opt/
+RUN tar xvf /opt/nrpe-*.tar.gz \
+    && rm -rf nrpe-*.tar.gz \
+    && mv /opt/nrpe-* /opt/nrpe
 WORKDIR /opt/nrpe
-RUN ./configure --enable-command-args --with-nagios-user=nagios --with-nagios-group=nagios --with-ssl=/usr/bin/openssl --with-ssl-lib=/usr/lib/x86_64-linux-gnu
-RUN make all
-RUN make install
-RUN make install-xinetd
-RUN make install-daemon-config
+# RUN ./configure --enable-command-args --with-ssl-lib=/usr/lib/x86_64-linux-gnu/ \
+RUN ./configure --enable-command-args --with-nagios-user=nagios --with-nagios-group=nagios --with-ssl=/usr/bin/openssl --with-ssl-lib=/usr/lib/x86_64-linux-gnu \
+    && make all \
+    && make install
 
 ## Customisation of nagios server
 WORKDIR /opt/ 
 # RUN curl -L -O http://sourceforge.net/projects/arana-nagios/files/arana_style-1.0for-Nagios3x-ENG.zip
 COPY Resources/arana_style-1.0for-Nagios3x-ENG.zip /opt/
-RUN unzip arana_style-*.zip && cp -r arana_style/* /usr/local/nagios/share/ && rm -rf arana_style*
+RUN unzip arana_style-*.zip \
+    && cp -r arana_style/* /usr/local/nagios/share/ \
+    && rm -rf arana_style*
 COPY nath_status.php /usr/local/nagios/share/nath_status.php
 
-EXPOSE 25 465 587 80 5666
-
-## Customising the nagios configuration location
-RUN sed -i "s|#cfg_dir=/usr/local/nagios/etc/servers|cfg_dir=/usr/local/nagios/etc/servers|g" /usr/local/nagios/etc/nagios.cfg
-RUN mkdir /usr/local/nagios/etc/servers
-RUN mv /etc/xinetd.d/nrpe /etc/xinetd.d/nrpe-bak
-RUN mv /usr/local/nagios/etc/objects/commands.cfg /usr/local/nagios/etc/objects/commands.cfg-bak
-
 ## nagios configurations
+WORKDIR /usr/local/nagios/etc/servers
+RUN sed -i "s|#cfg_dir=/usr/local/nagios/etc/servers|cfg_dir=/usr/local/nagios/etc/servers|g" /usr/local/nagios/etc/nagios.cfg
 COPY ConfigTemplates/template.cfg /usr/local/nagios/etc/servers/template.cfg
 COPY ConfigTemplates/commands.cfg /usr/local/nagios/etc/objects/commands.cfg
 
 ## Configuring custom templates and plugins for nagios plugins
 COPY ConfigTemplates/contacts.cfg /usr/local/nagios/etc/servers/monitor/contacts.cfg
-# COPY CustomPlugin/check_mem /usr/local/nagios/libexec/check_mem
-RUN chmod a+x /usr/local/nagios/libexec/*
 
-ENV USER_PASSWORD "MyroUserCreds"
-ENV SMTP_SERVER "smtp.gmail.com"
-ENV SMTP_PORT "587"
-ENV SMTP_USERNAME ""
-ENV SMTP_PASSWORD ""
-ENV NAGIOS_MAIL_SENDER "PagerDuty <mymail@gmail.com>"
-ENV LOCAL_MONITOR "N"
+WORKDIR /run/secrets
+RUN echo "MyroUserCreds" > /run/secrets/CUSTOM_USER_PASSWORD
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod a+x /entrypoint.sh
+ENV USER_PASSWORD=""
+ENV USER_PASSWORD_FILE="/run/secrets/CUSTOM_USER_PASSWORD"
+ENV SMTP_SERVER="smtp.gmail.com"
+ENV SMTP_PORT="587"
+ENV SMTP_USERNAME=""
+ENV SMTP_PASSWORD=""
+ENV SMTP_PASSWORD_FILE=""
+ENV NAGIOS_MAIL_SENDER="PagerDuty <mymail@gmail.com>"
+ENV LOCAL_MONITOR="N"
+
+COPY entrypoint.sh /
+COPY envFromFile.sh /
+RUN chmod a+x /envFromFile.sh /entrypoint.sh
+
+EXPOSE 25 465 587 80 5666
+WORKDIR /usr/local/nagios
 ENTRYPOINT [ "/entrypoint.sh" ]

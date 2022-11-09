@@ -22,7 +22,20 @@ echo ""
 echo "Configuring........"
 sleep 5
 
+source /envFromFile.sh SMTP_USERNAME
+source /envFromFile.sh SMTP_PASSWORD
+source /envFromFile.sh NAGIOS_USERNAME
+source /envFromFile.sh NAGIOS_PASSWORD
 
+
+##########################################
+function setAdminCred() {
+cat << EOF > /usr/local/bin/adminpass
+#!/bin/bash
+base64 /tmp/DeploymentTime.txt
+EOF
+chmod a+x /usr/local/bin/adminpass
+}
 
 ##########################################
 function serviceConfig() {
@@ -42,16 +55,14 @@ function serviceConfig() {
         ADMIN_PASSWORD=$(base64 /tmp/DeploymentTime.txt)
         htpasswd -b -c /usr/local/nagios/etc/htpasswd.users nagiosadmin ${ADMIN_PASSWORD}
         unset ADMIN_PASSWORD
+        setAdminCred
 
-cat <<EOF > /usr/local/bin/adminpass
-#!/bin/bash
-base64 /tmp/DeploymentTime.txt
-EOF
-        chmod a+x /usr/local/bin/adminpass
-
-        if [[ ! "${USER_PASSWORD}" = "" ]] ; then
-            htpasswd -b /usr/local/nagios/etc/htpasswd.users nagiosuser ${USER_PASSWORD}
-            echo "authorized_for_read_only=nagiosuser" >> /usr/local/nagios/etc/cgi.cfg
+        if [[ ! "${NAGIOS_PASSWORD}" = "" ]] ; then
+            if [[ ! ${NAGIOS_USERNAME} == "" ]] ; then
+                export NAGIOS_USERNAME="nagiosuser"
+            fi
+            htpasswd -b /usr/local/nagios/etc/htpasswd.users ${NAGIOS_USERNAME} ${NAGIOS_PASSWORD}
+            echo "authorized_for_read_only=${NAGIOS_USERNAME}" >> /usr/local/nagios/etc/cgi.cfg
         fi
     fi
 
@@ -87,8 +98,6 @@ EOF
     postconf -e mydestination="`hostname -f`, localhost.localdomain, localhost"
     echo "`hostname -f`" > /etc/mailname
     sed -i "s|^result_limit=.*|result_limit=0|g" /usr/local/nagios/etc/cgi.cfg
-
-    ln -s /etc/apache2/sites-available/nagios.conf /etc/apache2/sites-enabled/
     chown -R nagios:nagios /usr/local/nagios/etc/servers
 }
 
@@ -120,10 +129,8 @@ function serviceStart() {
     customConfig
     a2enmod rewrite
     a2enmod cgi
-    service xinetd restart & wait
     service nagios restart & wait
     service postfix restart & wait
-    # kill -9 $(ps -ef | grep apache2 | grep -v grep | awk '{print $2}')
     ps -ef | grep -v grep | grep -i apache2 | awk '{print $2}' | xargs kill -9
     apachectl -D FOREGROUND
 }

@@ -2,65 +2,89 @@
 
 Nagios, now known as Nagios Core, is a free and open-source computer-software application that monitors systems, networks and infrastructure. Nagios offers monitoring and alerting services for servers, switches, applications and services.
 
-## Prerequisites
-
-* We are using `devops-network` docker network for all devops deployment.
-* You need at least Docker Engine 17.06.0  and docker-compose 1.18 for this to work.
-
-```bash
-docker --version
-docker-compose --version
-```
-
 ## Create Docker image from Dockerfile
 
 ```bash
-docker build -t akhilrajmailbox/nagios:4.3.2 . -f Docker/Dockerfile
+docker build -t akhilrajmailbox/nagios:4.4.6 . -f Dockerfile
 ```
 
-## Create custom Docker network before deploying container (If the network is already created then ignore it)
+## Deploy Nagios stack to Swarm
+
+### Prerequisites
+
+*  The client and daemon API must both be at least 1.24 to use this command. Use the docker version command on the client to check your client and daemon API versions.
+* You need at least Docker Engine 19.03.0+ for this to work (Compose specification: 3.8).
+
+```bash
+docker version
+```
+
+### Create custom Docker network before deploying container (If the network is already created then ignore it)
 
 *Note : Make sure that the subnet won't conflict with any other subnets*
 
 ```bash
-docker network create --driver=bridge --subnet=172.31.0.0/16 devops-network
+docker network create --driver=overlay --subnet=172.29.1.0/24 devops-swarm-network
 ```
 
-## Deploy SonarQube as Docker container
+### Create docker secret with htpassword and email credentials
 
 ```bash
-docker-compose -f docker-compose.yml up -d
+echo "NagiosUserName" | docker secret create NAGIOS_USERNAME_SECRET -
+echo "SomeSecretPass" | docker secret create NAGIOS_PASSWORD_SECRET -
+echo "SmtpUserName" | docker secret create SMTP_USERNAME_SECRET -
+echo "SomeSecretPass" | docker secret create SMTP_PASSWORD_SECRET -
 ```
 
-
-## Working with nagios
-
-
-* Login to nagios server
+### Deploy
 
 ```bash
-docker exec -it nagios /bin/bash
+docker stack deploy --compose-file=Nagios-swarm.yml nagios-stack
 ```
 
-* Restarting nagios
+### Removing nagios stack
 
 ```bash
-docker-compose -f docker-compose.yml restart
+docker stack rm nagios-stack
 ```
 
-* stopping/starting nagios
+### Working with nagios
 
-```
-docker-compose -f docker-compose.yml stop/start
-```
-
-* check the logs of nagios server
+* List the stack
 
 ```bash
-docker logs -f nagios
+docker stack ls
 ```
 
+* List the tasks in the stack
 
+```bash
+docker stack ps nagios-stack
+```
+
+* List the services in the stack
+
+```bash
+docker stack services nagios-stack
+```
+
+* find the docker conatiner ID and Login to nagios-stack server
+
+```bash
+docker exec -it $(docker ps -q -f name=nagios-stack) /bin/bash
+```
+
+* Restarting nagios-stack
+
+```bash
+docker stack deploy --compose-file=Nagios-swarm.yml nagios-stack
+```
+
+* check the logs of nagios-stack server
+
+```bash
+docker logs -f $(docker ps -q -f name=nagios-stack)
+```
 
 ## Environment variables
 

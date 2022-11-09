@@ -1,0 +1,87 @@
+# https://docs.docker.com/compose/compose-file/compose-file-v3/
+version: '3.8'
+services:
+  nagios:
+    image: akhilrajmailbox/nagios:4.4.6
+    environment:
+      SMTP_SERVER: "206.126.185.52"
+      SMTP_PORT: "25"
+      NAGIOS_MAIL_SENDER: "PagerDuty <nagios.manager@mycomany.com>"
+      SMTP_USERNAME_FILE: "/run/secrets/SMTP_USERNAME_SECRET"
+      SMTP_PASSWORD_FILE: "/run/secrets/SMTP_PASSWORD_SECRET"
+      NAGIOS_USERNAME_FILE: "/run/secrets/NAGIOS_USERNAME_SECRET"
+      NAGIOS_PASSWORD_FILE: "/run/secrets/NAGIOS_PASSWORD_SECRET"
+    secrets:
+      - SMTP_USERNAME_SECRET
+      - SMTP_PASSWORD_SECRET
+      - NAGIOS_USERNAME_SECRET
+      - NAGIOS_PASSWORD_SECRET
+    ports:
+      - target: 80
+        published: 30000
+        protocol: tcp
+        mode: host
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:80/nagios/"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 120s
+    labels:
+      - "com.devops.service.name=nagios"
+      - "com.devops.service.module=monitoring"
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - "com.devops.service.name=nagios"
+        - "com.devops.service.module=monitoring"
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause # rollback
+        monitor: 5s
+        order: stop-first
+      # rollback_config:
+      #   parallelism: 1
+      #   delay: 10s
+      #   failure_action: pause
+      #   monitor: 5s
+      #   order: stop-first
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+        # window: 120s
+      placement:
+        max_replicas_per_node: 1
+        constraints:
+          - "node.role==manager"
+          - "node.platform.os==linux"
+      resources:
+        limits:
+          cpus: "0.500"
+          memory: 1G
+        reservations:
+          cpus: "0.100"
+          memory: 0.5G
+    volumes:
+      # Directory must exist on the Host
+      - /DevOps/nagios/MonitorCfg:/tmp/MonitorCfg
+    networks:
+      - swarm-network
+
+secrets:
+  SMTP_USERNAME_SECRET:
+    external: true
+  SMTP_PASSWORD_SECRET:
+    external: true
+  NAGIOS_USERNAME_SECRET:
+    external: true
+  NAGIOS_PASSWORD_SECRET:
+    external: true
+
+networks:
+  swarm-network:
+    external: true
+    name: swarm-network

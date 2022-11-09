@@ -15,9 +15,21 @@ fi
 
 # docker compose and docker swarm
 if docker stack ls > /dev/null 2>&1 ; then
-  STACK_NAME=${1}
   SERVICE_TYPE="Swarm Container"
-  CONTAINER=$(docker stack ps ${STACK_NAME} --format "{{.ID}}" | head -1 | xargs docker inspect --format '{{.Status.ContainerStatus.ContainerID}}')
+  if [[ ${1} = *":"* ]] && [[ ${1} != ":"* ]] && [[ ${1} != *":" ]] ; then
+    STACK_NAME=$(echo ${1} | cut -d":" -f1)
+    SVC_NAME=$(echo ${1} | cut -d":" -f2)
+    STACK_SVC_NAME=$(docker stack ps ${STACK_NAME} --format={{.Name}} | grep -i ${SVC_NAME} | head -1)
+    if [[ ! -z ${STACK_SVC_NAME} ]] ; then
+      CONTAINER=$(docker stack ps ${STACK_NAME} -f name=${STACK_SVC_NAME} --format "{{.ID}}" | head -1 | xargs docker inspect --format '{{.Status.ContainerStatus.ContainerID}}')
+    else
+      echo "STACK_SVC_NAME is empty, please check for service name : ${SVC_NAME}"
+      exit 1
+    fi
+  else
+    STACK_NAME=${1}
+    CONTAINER=$(docker stack ps ${STACK_NAME} --format "{{.ID}}" | head -1 | xargs docker inspect --format '{{.Status.ContainerStatus.ContainerID}}')
+  fi
 else
   SERVICE_TYPE="Compose Container"
   CONTAINER=${1}
@@ -59,7 +71,10 @@ if [ "${RESTARTING}" == "true" ]; then
   exit 1
 fi
 
-STARTED=$(docker inspect --format="{{.State.StartedAt}}" ${CONTAINER} | cut -d"." -f1)
+STARTED_ACTUAL=$(docker inspect --format="{{.State.StartedAt}}" ${CONTAINER} | cut -d"." -f1)
+STARTED_DATE=$(echo ${STARTED_ACTUAL} | cut -d"T" -f1)
+STARTED_TIME=$(echo ${STARTED_ACTUAL} | cut -d"T" -f2)
+STARTED=$(echo Date : ${STARTED_DATE} Time : ${STARTED_TIME})
 NETWORK_IP=$(docker inspect --format="{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" ${CONTAINER})
 
 if [ "${ACTUATOR_OPT}" != "" ] ; then
