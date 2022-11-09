@@ -15,7 +15,7 @@ docker-compose --version
 ## Create Docker image from Dockerfile
 
 ```bash
-docker build -t akhilrajmailbox/nagios:1.0.0 . -f Docker/Dockerfile
+docker build -t akhilrajmailbox/nagios:4.3.2 . -f Docker/Dockerfile
 ```
 
 ## Create custom Docker network before deploying container (If the network is already created then ignore it)
